@@ -1,0 +1,211 @@
+---
+title: "Brexit Survey Analysis"
+output:
+  html_document: default
+classoption: landscape
+fontsize: 14pt
+
+---
+```{r libs, echo=FALSE, message=FALSE, include=FALSE}
+source("global.R")
+library(gridExtra)
+
+```
+
+```{r functions, echo=FALSE, message=FALSE, include=FALSE, cache=TRUE}
+brexit.file=read_csv("Brexit.csv")
+brexit.comments=get_comments(brexit.file, "Brexit")
+brexit.comments.clean=brexit.comments
+brexit.comments.clean[]<-lapply(brexit.comments, gsub, pattern= 'none', replacement='')
+brexit.corpus=clean_corpus(prep_corpus(brexit.comments.clean))
+brexit.corpus.df=get_corpus_df(brexit.corpus)
+brexit.frequencies=term_stats(brexit.corpus)
+brexit.dtm=get_dtm(brexit.corpus)
+brexit.dtm.bigram=get_dtm_bigram(brexit.corpus)
+
+ud_model <- udpipe_download_model(language = "english")
+ud_model <- udpipe_load_model(ud_model$file_model)
+brexit.ud=get_ud_data(brexit.comments.clean)
+brexit.8topics=get_topic_model(brexit.dtm, 8)
+brexit.8topics.bigram=get_topic_model(brexit.dtm.bigram, 8)
+
+brexit.readability=get_readability(brexit.comments.clean)
+brexit.ages=estimate_ages(brexit.ud, brexit.readability)
+
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This report gives a brief summary of the textual analysis of the submissions to the Brexit Survey by the Leeds Chamber of Commerce. 
+
+**Summary of Key Points**
+
+  * A total of **`r nrow(brexit.comments)`** comments were posted to this survey.
+  * Primary school-level educated participants.
+  * Generally quite positice submissions with anticipation and trust also being common sentiments.
+  * Main issues raised are of the price of raw materials and stock holding.
+  
+
+
+## Frequency Analysis
+
+The comments had an average of **`r round(mean(get_each_comment_length(brexit.comments)$Length))`** words in each,  however almost 150 of the respondants responded with "none". There was an average Flesch readability score of `r round(mean(brexit.readability$Flesch))` suggesting readers needed to be educated to at least a UK Grade Level of `r round(mean(brexit.readability$Flesch.Kincaid)) + 1` to understand the comments. As this engagement activity was in survey format, the people making submissions were educated just to primary school level. The very short length of the comments also suggests very little qualitative reponse from the participants.
+
+<!---
+```{r}
+summary(get_each_comment_length(brexit.comments)$Length)
+```
+
+```{r}
+display_term_frequencies(brexit.frequencies, "Brexit Survey", 15 )
+```
+-->
+
+The most common adjectives, phrases and pairs of words are displayed below. People tend to express their emotions through the adjectives they use, and in this case "raw", "more", and "difficult" being used so often relate to the main concern of the increased price and difficulty regarding raw materials after Brexit. 
+```{r frequencies, echo=FALSE,  tidy=TRUE, fig.width=10}
+{grid.arrange(display_adjectives(brexit.ud, 15), display_keywords(brexit.ud, 15), ncol=2)}
+```
+
+
+
+A network of the most frequent consecutive word pairs (bigrams) is shown below. "increased stock", "raw materials", and "supply chain"
+are the most common word pairs in the dataset. Phrases such as "awaiting outcome", "direct impact", and "what's happening" are also common and suggest pockets of comments which express uncertainty and worry at the impending issue and its effects on their business. The presence of "overseas students" also suggests these worries extend beyond the industries. 
+
+```{r bigrams, echo=FALSE, tidy=TRUE, fig.width=15, fig.height=10}
+display_bigrams(brexit.comments, 2, "Brexit Survey")
+
+```
+
+
+***
+
+## Topic Extraction
+
+A plot of words most associated with one of 8 topics are shown below. 
+<!---
+Topic 8 is primarily about the technicalities of the application process with words such as "home office", "6 months", "application process", and "long tedious". Topic 6 is primarily about the lengthy application process and the costs associated with this, for example "paper work", "took long", "long expensive". 
+
+A brief summary of those topics are:
+
+Topic Number  | Common bigrams
+-------- | ------------------
+Topic 1  | mental health, blood sugars, life saving, self fund
+Topic 2  | complete ban, trail hinting,
+Topic 3  | funding needed, psychological support, available prescription, avoiding complications
+Topic 4  | adult care, self management, managing condition
+Topic 5  | long term, daughter diagnosed
+Topic 6  | closed loop system, medical conditions, change diet, diabetes team
+Topic 7  | healthcare, newly diagnosed
+Topic 8  | basal insulin, checking blood, development type, weight gain
+Topic 9  | postcode lottery, mental health, urine test
+Topic 10  | nodeal brexit, quality of life, reassuring people, manage condition
+--> 
+
+<!---\begin{center}
+\end{center}
+![](Diabetes bigram topics.pdf)  
+
+
+\begin{center}
+\includegraphics{Diabetes bigram topics.pdf}
+\end{center}
+--> 
+
+```{r, echo=FALSE}
+display_top_topics(brexit.8topics, 10, "Brexit Survey")
+
+```
+
+<!--
+```{r twordcloud, echo=FALSE, message=FALSE, warning=FALSE}
+myColourHue= function(n=10) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 45, c = 100)[1:n]
+}
+get_topic_wordcloud(brexit.8topics)
+```
+-->
+
+
+
+Topic model visualisations are split into two sections:
+
+  * **Left** - showing topic distances from each other based on the types of words in each,
+
+  * **Right** – showing the top 30 words in each topic (red bar) and overall in the dataset (blue bar). I recommend setting the relavance metric to 0.6 to get a more representative list of words in each topic.
+
+This visualisation is interactive, hover over each topic number to view the words in each topic, or select each word to view which topics it appears.  
+
+https://nicolednisbett.github.io/Brexit-Survey/#topic=0&lambda=0.62&term=
+<!--
+```{r servis, echo=FALSE, message=FALSE, warning=FALSE}
+serVis(topicmodels2LDAvis(brexit.8topics), out.dir="a", open.browser = FALSE)
+htmltools::includeHTML("a/index.html")
+```
+
+<head>
+  <script src="a/d3.v3.js"></script>
+  <script src="a/ldavis.js"></script>
+  <link rel="stylesheet" type="text/css" href="a/lda.css">
+</head>
+<body>
+  <div id = "mydiv"></div>
+  <script>
+    var vis = new LDAvis("#mydiv", "lda.json");
+  </script>
+</body>
+
+
+<iframe width="1000" height="800" src="a/index.html" frameborder="0"></iframe>
+
+-->
+
+
+## Sentiment Analysis
+
+The wordcloud below gives the most popular words associated with positive and negative sentiments in the survey. Specific comments
+which are associated with the most popular sentiments are listed below.
+
+```{r swordcloud, echo=FALSE, message=FALSE, warning=FALSE}
+get_sentiments_wordcloud(get_bingnrc_word_frequencies(brexit.corpus.df, "bing"), "bing")
+```
+
+
+
+The  **NRC** sentiment lexicon uses categorical scale to measure 2 sentiments (positive and negative), and 8 emotions (anger, anticipation, disgust, trust, joy, sadness, fear, and suprise).
+Examples of words and comments in these sentiment categories are below. In this debate, the majority of submissions were negative but also categorised as *anticipation* and *positive*. 
+
+```{r nrc2, echo=FALSE, message=FALSE}
+  plot_bingnrc_distributions(get_bingnrc_document_frequencies(brexit.corpus,"nrc"), "Brexit Survey", "nrc")
+  
+```
+
+
+Hover over the plot below to read the content of the comments within each sentiment category.
+
+```{r comments,echo=FALSE, message=FALSE, warning=FALSE }
+ggplotly(display_topic_comments(get_sentiment_comments(brexit.corpus.df, brexit.comments, "nrc"), "Visa Debate"), width=1000, height = 600) %>% config(displayModeBar=FALSE) %>% hide_legend()
+```
+
+
+***
+
+
+An example of a comment categorised as **negative**
+
+  > `r brexit.comments[117,][[1]]`
+
+
+An example of a comment categorised as **anticipation**
+
+  > `r brexit.comments[336,][[1]]`
+
+
+An example of a comment categorised as **trust**
+
+  > `r brexit.comments[333,][[1]]`
+
+
