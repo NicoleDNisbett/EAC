@@ -1,0 +1,207 @@
+---
+title: "EAC Analysis"
+output:
+  html_document: default
+classoption: landscape
+fontsize: 14pt
+
+---
+```{r libs, echo=FALSE, message=FALSE, include=FALSE}
+source("global.R")
+library(gridExtra)
+
+```
+
+```{r functions, echo=FALSE, message=FALSE, include=FALSE, cache=TRUE}
+EAC.file=read_csv("/Users/nicolenisbett/OneDrive - University of Leeds/PhD/Data/Platform Experiments/EAC/EAC Comments.csv")
+EAC.comments=get_comments(EAC.file, "EAC")
+EAC.comments.clean=EAC.comments
+EAC.comments.clean[]<-lapply(EAC.comments, gsub, pattern= 'none', replacement='')
+EAC.corpus=clean_corpus(prep_corpus(EAC.comments.clean))
+EAC.corpus.df=get_corpus_df(EAC.corpus)
+EAC.frequencies=term_stats(EAC.corpus)
+EAC.dtm=get_dtm(EAC.corpus)
+EAC.dtm.bigram=get_dtm_bigram(EAC.corpus)
+
+ud_model <- udpipe_download_model(language = "english")
+ud_model <- udpipe_load_model(ud_model$file_model)
+EAC.ud=get_ud_data(EAC.comments.clean)
+EAC.7topics=get_topic_model(EAC.dtm, 7)
+EAC.7topics.bigram=get_topic_model(EAC.dtm.bigram, 7)
+EAC.btm = get_btm_model(EAC.comments, 7)
+
+EAC.readability=get_readability(EAC.comments.clean)
+EAC.ages=estimate_ages(EAC.ud, EAC.readability)
+
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This report gives a brief summary of the textual analysis of the submissions to the discussion on Invasive Species by the Environemntal Audit Select Committee. 
+
+**Summary of Key Points**
+
+  * A total of **`r nrow(EAC.comments)`** comments were posted to this survey.
+  * Approximately GCSE-level educated participants.
+  * Generally quite positice submissions with anticipation and trust also being common sentiments.
+  * Main issues raised are of squirrels in the UK .
+  
+
+
+## Frequency Analysis
+
+The comments had an average of **`r round(mean(get_each_comment_length(EAC.comments)$Length))`** words in each. There was an average Flesch readability score of `r round(mean(EAC.readability$Flesch))` suggesting readers needed to be educated to at least a UK Grade Level of `r round(mean(EAC.readability$Flesch.Kincaid)) + 1` to understand the comments.
+
+
+```{r}
+summary(get_each_comment_length(EAC.comments)$Length)
+```
+
+```{r}
+display_term_frequencies(EAC.frequencies, "EAC Survey", 15 )
+```
+
+
+The most common adjectives, phrases and pairs of words are displayed below. People tend to express their emotions through the adjectives they use, and in this case "red", "invasive", and "grey" being used so often relate to the main concern of the large proportion of participants discussing red and grey squirrels. However, the phrases "honey bee", "eu directive", and "himalayan balsam" also show a range of different species and topics outside of squirrels was being discussed over the week.
+```{r frequencies, echo=FALSE,  tidy=TRUE, fig.width=10}
+{grid.arrange(display_adjectives(EAC.ud, 15), display_keywords(EAC.ud, 15), ncol=2)}
+```
+
+
+
+A network of the most frequent consecutive word pairs (bigrams) is shown below. "grey squirrels", "red squirrels", and "invasive species"
+are the most common word pairs in the dataset. A cluster comprising of phrases such as "alien/invasive/native species"  show a difference of terminology used in the discussion, while another cluser of phrases surrounding squirrels referrs to the primary debate. "Japanese knotweed" and "climate change" are also common bigrams and suggest alternative discussions that were ongoing. 
+
+```{r bigrams, echo=FALSE, tidy=TRUE, fig.width=15, fig.height=10}
+display_bigrams(EAC.comments, 10, "EAC Discussion")
+
+```
+
+
+***
+
+## Topic Extraction
+
+A plot of words most associated with one of 7 topics are shown below. 
+<!---
+Topic 8 is primarily about the technicalities of the application process with words such as "home office", "6 months", "application process", and "long tedious". Topic 6 is primarily about the lengthy application process and the costs associated with this, for example "paper work", "took long", "long expensive". 
+
+A brief summary of those topics are:
+
+Topic Number  | Common bigrams
+-------- | ------------------
+Topic 1  | mental health, blood sugars, life saving, self fund
+Topic 2  | complete ban, trail hinting,
+Topic 3  | funding needed, psychological support, available prescription, avoiding complications
+Topic 4  | adult care, self management, managing condition
+Topic 5  | long term, daughter diagnosed
+Topic 6  | closed loop system, medical conditions, change diet, diabetes team
+Topic 7  | healthcare, newly diagnosed
+--> 
+
+```{r, echo=FALSE}
+display_top_topics_btm(EAC.btm, 10, "EAC Discussion")
+
+```
+
+<!--
+```{r twordcloud, echo=FALSE, message=FALSE, warning=FALSE}
+myColourHue= function(n=10) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 45, c = 100)[1:n]
+}
+get_topic_wordcloud(EAC.7topics.bigram)
+```
+-->
+
+
+
+Topic model visualisations are split into two sections:
+
+  * **Left** - showing topic distances from each other based on the types of words in each,
+
+  * **Right** – showing the top 30 words in each topic (red bar) and overall in the dataset (blue bar). I recommend setting the relavance metric to 0.6 to get a more representative list of words in each topic.
+
+This visualisation is interactive, hover over each topic number to view the words in each topic, or select each word to view which topics it appears.  
+
+https://nicolednisbett.github.io/EAC/#topic=0&lambda=0.60&term=
+<!--
+```{r servis, echo=FALSE, message=FALSE, warning=FALSE}
+serVis(topicmodels2LDAvis(EAC.7topics.bigram), out.dir="a", open.browser = FALSE)
+htmltools::includeHTML("a/index.html")
+```
+
+<head>
+  <script src="a/d3.v3.js"></script>
+  <script src="a/ldavis.js"></script>
+  <link rel="stylesheet" type="text/css" href="a/lda.css">
+</head>
+<body>
+  <div id = "mydiv"></div>
+  <script>
+    var vis = new LDAvis("#mydiv", "lda.json");
+  </script>
+</body>
+
+
+<iframe width="1000" height="800" src="a/index.html" frameborder="0"></iframe>
+
+-->
+
+
+## Sentiment Analysis
+
+The wordcloud below gives the most popular words associated with positive and negative sentiments in the survey. Specific comments
+which are associated with the most popular sentiments are listed below.
+
+```{r swordcloud, echo=FALSE, message=FALSE, warning=FALSE}
+get_sentiments_wordcloud(get_bingnrc_word_frequencies(EAC.corpus.df, "bing"), "bing")
+```
+
+
+
+The  **NRC** sentiment lexicon uses categorical scale to measure 2 sentiments (positive and negative), and 8 emotions (anger, anticipation, disgust, trust, joy, sadness, fear, and suprise).
+Examples of words and comments in these sentiment categories are below. In this debate, the majority of submissions were equally negative and positive but also categorised as *trust*, *sadness*, and *fear*. 
+
+```{r nrc2, echo=FALSE, message=FALSE}
+  plot_bingnrc_distributions(get_bingnrc_document_frequencies(EAC.corpus,"nrc"), "EAC Survey", "nrc")
+  
+```
+
+
+Hover over the plot below to read the content of the comments within each sentiment category.
+
+```{r comments,echo=FALSE, message=FALSE, warning=FALSE }
+ggplotly(display_topic_comments(get_sentiment_comments(EAC.corpus.df, EAC.comments, "nrc"), "Visa Debate"), width=1000, height = 600) %>% config(displayModeBar=FALSE) %>% hide_legend()
+```
+
+
+***
+
+
+An example of a comment categorised as **negative**
+
+  > `r EAC.comments[130,][[1]]`
+
+
+An example of a comment categorised as **positive**
+
+  > `r EAC.comments[64,][[1]]`
+
+
+An example of a comment categorised as **trust**
+
+  > `r EAC.comments[381,][[1]]`
+  
+An example of a comment categorised as **sadness**
+
+  > `r EAC.comments[373,][[1]]`
+
+An example of a comment categorised as **fear**
+
+  > `r EAC.comments[488,][[1]]`
+
+
